@@ -1,6 +1,9 @@
 package com.uservoice.uservoicesdk.model;
 
+import android.content.Context;
+
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.json.JSONException;
@@ -12,11 +15,11 @@ import com.uservoice.uservoicesdk.babayaga.Babayaga;
 
 public class Ticket extends BaseModel {
 
-    public static void createTicket(String message, Map<String, String> customFields, final Callback<Ticket> callback) {
-        createTicket(message, null, null, customFields, callback);
+    public static void createTicket(Context context, String message, Map<String, String> customFields, final Callback<Ticket> callback) {
+        createTicket(context, message, null, null, customFields, callback);
     }
 
-    public static void createTicket(String message, String email, String name, Map<String, String> customFields, final Callback<Ticket> callback) {
+    public static void createTicket(Context context, String message, String email, String name, Map<String, String> customFields, final Callback<Ticket> callback) {
         Map<String, String> params = new HashMap<String, String>();
         params.put("ticket[message]", message);
 
@@ -33,8 +36,8 @@ public class Ticket extends BaseModel {
             params.put(String.format("created_by[external_ids][%s]", entry.getKey()), entry.getValue());
         }
 
-        if (getConfig().getCustomFields() != null) {
-            for (Map.Entry<String, String> entry : getConfig().getCustomFields().entrySet()) {
+        if (getConfig(context).getCustomFields() != null) {
+            for (Map.Entry<String, String> entry : getConfig(context).getCustomFields().entrySet()) {
                 params.put(String.format("ticket[custom_field_values][%s]", entry.getKey()), entry.getValue());
             }
         }
@@ -45,7 +48,17 @@ public class Ticket extends BaseModel {
             }
         }
 
-        doPost(apiPath("/tickets.json"), params, new RestTaskCallback(callback) {
+        List<Attachment> attachmentList = getSession().getConfig(context).getAttachmentList();
+        if (attachmentList != null) {
+            for (int i = 0; i < attachmentList.size(); i++) {
+                Attachment attachment = attachmentList.get(i);
+                params.put(String.format("ticket[attachments][%d][name]", i), attachment.getFileName());
+                params.put(String.format("ticket[attachments][%d][data]", i), attachment.getData());
+                params.put(String.format("ticket[attachments][%d][content_type]", i), attachment.getContentType());
+            }
+        }
+
+        doPost(context, apiPath("/tickets.json"), params, new RestTaskCallback(callback) {
             @Override
             public void onComplete(JSONObject result) throws JSONException {
                 callback.onModel(deserializeObject(result, "ticket", Ticket.class));

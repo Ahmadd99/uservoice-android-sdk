@@ -1,23 +1,24 @@
 buildscript {
     repositories {
         mavenCentral()
+        jcenter()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:0.9.+'
+        classpath 'com.android.tools.build:gradle:3.0.1'
     }
 }
 
-apply plugin: 'android'
+apply plugin: 'com.android.application'
 
 repositories {
     mavenCentral()
+    google()
 }
 
 android {
-    compileSdkVersion 19
-    buildToolsVersion "19.0.3"
-
+    compileSdkVersion 26
+    buildToolsVersion '26.0.2'
     sourceSets {
         main {
             manifest.srcFile 'AndroidManifest.xml'
@@ -26,7 +27,6 @@ android {
             res.srcDirs = ['res']
         }
     }
-
     signingConfigs {
         release {
             storeFile file("../demo.keystore")
@@ -35,10 +35,19 @@ android {
             keyPassword ""
         }
     }
-
     buildTypes {
         release {
             signingConfig signingConfigs.release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        proguard {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            debuggable true
         }
     }
 }
@@ -60,6 +69,6 @@ tasks.whenTaskAdded { theTask ->
 }
 
 dependencies {
-  compile 'com.android.support:support-v4:19.0.1'
-  compile project(':UserVoiceSDK')
+    compile 'com.android.support:support-core-utils:26.1.0'
+    compile project(':UserVoiceSDK')
 }

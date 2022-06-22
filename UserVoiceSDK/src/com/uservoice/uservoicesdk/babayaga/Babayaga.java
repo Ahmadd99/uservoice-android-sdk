@@ -29,7 +29,6 @@ public class Babayaga {
     }
 
     private static String uvts;
-    private static Map<String, Object> traits;
     private static SharedPreferences prefs;
 
     public enum Event {
@@ -69,15 +68,11 @@ public class Babayaga {
         edit.commit();
     }
 
-    public static void setUserTraits(Map<String, Object> traits) {
-        Babayaga.traits = traits;
+    public static void track(Context context, Event event) {
+        track(context, event, null);
     }
 
-    public static void track(Event event) {
-        track(event, null);
-    }
-
-    public static void track(Event event, String searchText, List<? extends BaseModel> results) {
+    public static void track(Context context, Event event, String searchText, List<? extends BaseModel> results) {
         Map<String, Object> props = new HashMap<String, Object>();
         List<Integer> ids = new ArrayList<Integer>(results.size());
         for (BaseModel model : results) {
@@ -85,22 +80,22 @@ public class Babayaga {
         }
         props.put("ids", ids);
         props.put("text", searchText);
-        track(event, props);
+        track(context, event, props);
     }
 
-    public static void track(Event event, int id) {
+    public static void track(Context context, Event event, int id) {
         Map<String, Object> props = new HashMap<String, Object>();
         props.put("id", id);
-        track(event, props);
+        track(context, event, props);
     }
 
-    public static void track(Event event, Map<String, Object> eventProps) {
-        track(event.getCode(), eventProps);
+    public static void track(Context context, Event event, Map<String, Object> eventProps) {
+        track(context, event.getCode(), eventProps);
     }
 
-    public static void track(String event, Map<String, Object> eventProps) {
+    public static void track(Context context, String event, Map<String, Object> eventProps) {
         // Log.d("UV", "BY flushing: " + event);
-        new BabayagaTask(event, uvts, traits, eventProps).execute();
+        new BabayagaTask(context, event, uvts, eventProps).execute();
     }
 
     public static void init(Context context) {
@@ -108,7 +103,7 @@ public class Babayaga {
         if (prefs.contains("uvts")) {
             uvts = prefs.getString("uvts", null);
         }
-        track(Event.VIEW_APP);
+        track(context, Event.VIEW_APP);
     }
 
     public static String getUvts() {

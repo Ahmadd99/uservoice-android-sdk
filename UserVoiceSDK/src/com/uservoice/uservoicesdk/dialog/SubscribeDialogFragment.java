@@ -7,7 +7,9 @@ import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import com.uservoice.uservoicesdk.R;
 import com.uservoice.uservoicesdk.Session;
@@ -41,33 +43,46 @@ public class SubscribeDialogFragment extends DialogFragmentBugfixed {
         }
         View view = getActivity().getLayoutInflater().inflate(R.layout.uv_subscribe_dialog, null);
         final EditText emailField = (EditText) view.findViewById(R.id.uv_email);
-        emailField.setText(Session.getInstance().getEmail());
+        emailField.setText(Session.getInstance().getEmail(getActivity()));
         builder.setView(view);
         builder.setNegativeButton(R.string.uv_nevermind, null);
-        builder.setPositiveButton(R.string.uv_subscribe, new DialogInterface.OnClickListener() {
+        builder.setPositiveButton(R.string.uv_subscribe, null);
+
+        final AlertDialog dialog = builder.create();
+        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        dialog.setOnShowListener(new DialogInterface.OnShowListener() {
             @Override
-            public void onClick(final DialogInterface dialog, int which) {
-                Session.getInstance().persistIdentity(Session.getInstance().getName(), emailField.getText().toString());
-                SigninManager.signinForSubscribe(getActivity(), Session.getInstance().getEmail(), new SigninCallback() {
+            public void onShow(DialogInterface d) {
+                // We override the dialog listener here instead of through the builder so that we can control when the dialog gets dismissed.
+                // Otherwise, the dialog will always dismiss when the positive button is clicked.
+                Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                positiveButton.setOnClickListener(new View.OnClickListener() {
                     @Override
-                    public void onSuccess() {
-                        suggestion.subscribe(new DefaultCallback<Suggestion>(getActivity()) {
-                            @Override
-                            public void onModel(Suggestion model) {
-                                if (getActivity() instanceof InstantAnswersActivity)
-                                    Deflection.trackDeflection("subscribed", deflectingType, model);
-                                suggestionDialog.suggestionSubscriptionUpdated(model);
-                                dialog.dismiss();
-                            }
-                        });
+                    public void onClick(View v) {
+                        String email = emailField.getText().toString();
+                        if (!SigninManager.isValidEmail(email)) {
+                            Toast.makeText(getActivity(), R.string.uv_msg_bad_email_format, Toast.LENGTH_SHORT).show();
+                        } else {
+                            Session.getInstance().persistIdentity(getActivity(), Session.getInstance().getName(getActivity()), email);
+                            SigninManager.signinForSubscribe(getActivity(), Session.getInstance().getEmail(getActivity()), new SigninCallback() {
+                                @Override
+                                public void onSuccess() {
+                                    suggestion.subscribe(getActivity(), new DefaultCallback<Suggestion>(getActivity()) {
+                                        @Override
+                                        public void onModel(Suggestion model) {
+                                            if (getActivity() instanceof InstantAnswersActivity)
+                                                Deflection.trackDeflection(getActivity(), "subscribed", deflectingType, model);
+                                            suggestionDialog.suggestionSubscriptionUpdated(model);
+                                            dialog.dismiss();
+                                        }
+                                    });
+                                }
+                            });
+                        }
                     }
                 });
             }
         });
-        AlertDialog dialog = builder.create();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
         return dialog;
     }
-
-
 }

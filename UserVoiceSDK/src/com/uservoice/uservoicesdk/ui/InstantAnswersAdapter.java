@@ -2,7 +2,6 @@ package com.uservoice.uservoicesdk.ui;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.support.v4.app.FragmentActivity;
 import android.text.Editable;
@@ -20,10 +19,12 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.uservoice.uservoicesdk.R;
 import com.uservoice.uservoicesdk.Session;
 import com.uservoice.uservoicesdk.deflection.Deflection;
+import com.uservoice.uservoicesdk.flow.SigninManager;
 import com.uservoice.uservoicesdk.model.Article;
 import com.uservoice.uservoicesdk.model.BaseModel;
 import com.uservoice.uservoicesdk.model.Suggestion;
@@ -127,7 +128,7 @@ public abstract class InstantAnswersAdapter extends BaseAdapter implements ViewG
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         int type = getItemViewType(position);
         if (type == INSTANT_ANSWER) {
-            Deflection.trackDeflection("show", deflectingType, (BaseModel) getItem(position));
+            Deflection.trackDeflection(context, "show", deflectingType, (BaseModel) getItem(position));
             Utils.showModel(context, (BaseModel) getItem(position), deflectingType);
         }
     }
@@ -221,13 +222,13 @@ public abstract class InstantAnswersAdapter extends BaseAdapter implements ViewG
             final EditText field = (EditText) view.findViewById(R.id.uv_text_field);
             if (type == EMAIL_FIELD) {
                 title.setText(R.string.uv_your_email_address);
-                restoreEnteredText(emailField, field, Session.getInstance().getEmail());
+                restoreEnteredText(emailField, field, Session.getInstance().getEmail(context));
                 emailField = field;
                 field.setHint(R.string.uv_email_address_hint);
                 field.setInputType(EditorInfo.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
             } else if (type == NAME_FIELD) {
                 title.setText(R.string.uv_your_name);
-                restoreEnteredText(nameField, field, Session.getInstance().getName());
+                restoreEnteredText(nameField, field, Session.getInstance().getName(context));
                 nameField = field;
                 field.setHint(R.string.uv_name_hint);
                 field.setInputType(EditorInfo.TYPE_TEXT_VARIATION_PERSON_NAME);
@@ -269,6 +270,8 @@ public abstract class InstantAnswersAdapter extends BaseAdapter implements ViewG
 
     protected void onButtonTapped() {
         if (state == State.INIT) {
+            if (textField == null)
+                return;
             String query = textField.getText().toString().trim();
             if (query.length() == 0)
                 return;
@@ -277,11 +280,11 @@ public abstract class InstantAnswersAdapter extends BaseAdapter implements ViewG
             Deflection.setSearchText(query);
             InputMethodManager imm = (InputMethodManager)context.getSystemService(Activity.INPUT_METHOD_SERVICE);
             imm.toggleSoftInput(InputMethodManager.HIDE_IMPLICIT_ONLY, 0);
-            Article.loadInstantAnswers(query, new DefaultCallback<List<BaseModel>>(context) {
+            Article.loadInstantAnswers(context, query, new DefaultCallback<List<BaseModel>>(context) {
                 @Override
                 public void onModel(List<BaseModel> model) {
                     List<BaseModel> results = model.subList(0, Math.min(model.size(), 3));
-                    Deflection.trackSearchDeflection(results, deflectingType);
+                    Deflection.trackSearchDeflection(context, results, deflectingType);
                     instantAnswers = model;
                     if (instantAnswers.isEmpty())
                         state = State.DETAILS;
@@ -296,14 +299,11 @@ public abstract class InstantAnswersAdapter extends BaseAdapter implements ViewG
         } else if (state == State.DETAILS) {
             String name = nameField.getText().toString();
             String email = emailField.getText().toString();
-            if (email.length() == 0) {
-                AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                builder.setTitle(R.string.uv_error);
-                builder.setMessage(R.string.uv_msg_user_identity_validation);
-                builder.create().show();
+            if (!SigninManager.isValidEmail(email)) {
+                Toast.makeText(context, R.string.uv_msg_bad_email_format, Toast.LENGTH_SHORT).show();
             } else if (!isPosting) {
                 isPosting = true;
-                Session.getInstance().persistIdentity(name, email);
+                Session.getInstance().persistIdentity(context, name, email);
                 doSubmit();
             }
         }

@@ -1,5 +1,9 @@
 package com.uservoice.uservoicesdk.model;
 
+import android.content.Context;
+import android.os.Parcel;
+import android.os.Parcelable;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,17 +15,22 @@ import com.uservoice.uservoicesdk.rest.Callback;
 import com.uservoice.uservoicesdk.rest.RestTask;
 import com.uservoice.uservoicesdk.rest.RestTaskCallback;
 
-public class Article extends BaseModel {
+public class Article extends BaseModel implements Parcelable {
 
     private String title;
     private String html;
     private String topicName;
     private int weight;
 
-    public static void loadAll(final Callback<List<Article>> callback) {
+    public Article() {}
+
+    public static void loadPage(Context context, int page, final Callback<List<Article>> callback) {
         Map<String, String> params = new HashMap<String, String>();
         params.put("sort", "ordered");
-        doGet(apiPath("/articles.json"), params, new RestTaskCallback(callback) {
+        params.put("filter", "published");
+        params.put("per_page", "50");
+        params.put("page", String.valueOf(page));
+        doGet(context, apiPath("/articles.json"), params, new RestTaskCallback(callback) {
             @Override
             public void onComplete(JSONObject result) throws JSONException {
                 callback.onModel(deserializeList(result, "articles", Article.class));
@@ -29,10 +38,13 @@ public class Article extends BaseModel {
         });
     }
 
-    public static void loadForTopic(int topicId, final Callback<List<Article>> callback) {
+    public static void loadPageForTopic(Context context, int topicId, int page, final Callback<List<Article>> callback) {
         Map<String, String> params = new HashMap<String, String>();
         params.put("sort", "ordered");
-        doGet(apiPath("/topics/%d/articles.json", topicId), params, new RestTaskCallback(callback) {
+        params.put("filter", "published");
+        params.put("per_page", "50");
+        params.put("page", String.valueOf(page));
+        doGet(context, apiPath("/topics/%d/articles.json", topicId), params, new RestTaskCallback(callback) {
             @Override
             public void onComplete(JSONObject result) throws JSONException {
                 callback.onModel(deserializeList(result, "articles", Article.class));
@@ -40,15 +52,15 @@ public class Article extends BaseModel {
         });
     }
 
-    public static RestTask loadInstantAnswers(String query, final Callback<List<BaseModel>> callback) {
-        Map<String, String> params = new HashMap<String, String>();
+    public static RestTask loadInstantAnswers(Context context, String query, final Callback<List<BaseModel>> callback) {
+        Map<String, String> params = new HashMap<>();
         params.put("per_page", "3");
-        params.put("forum_id", String.valueOf(getConfig().getForumId()));
+        params.put("forum_id", String.valueOf(getConfig(context).getForumId()));
         params.put("query", query);
-        if (getConfig().getTopicId() != -1) {
-            params.put("topic_id", String.valueOf(getConfig().getTopicId()));
+        if (getConfig(context).getTopicId() != -1) {
+            params.put("topic_id", String.valueOf(getConfig(context).getTopicId()));
         }
-        return doGet(apiPath("/instant_answers/search.json"), params, new RestTaskCallback(callback) {
+        return doGet(context, apiPath("/instant_answers/search.json"), params, new RestTaskCallback(callback) {
             @Override
             public void onComplete(JSONObject result) throws JSONException {
                 callback.onModel(deserializeHeterogenousList(result, "instant_answers"));
@@ -66,7 +78,7 @@ public class Article extends BaseModel {
         }
         if (!object.isNull("topic")) {
             JSONObject topic = object.getJSONObject("topic");
-            topicName = topic.getString("name");
+            topicName = getString(topic, "name");
         }
     }
 
@@ -84,5 +96,39 @@ public class Article extends BaseModel {
 
     public int getWeight() {
         return weight;
+    }
+
+    //
+    // Parcelable
+    //
+
+    public int describeContents() {
+        return 0;
+    }
+
+    public void writeToParcel(Parcel out, int flags) {
+        out.writeInt(id);
+        out.writeString(title);
+        out.writeString(html);
+        out.writeString(topicName);
+        out.writeInt(weight);
+    }
+
+    public static final Parcelable.Creator<Article> CREATOR = new Parcelable.Creator<Article>() {
+        public Article createFromParcel(Parcel in) {
+            return new Article(in);
+        }
+
+        public Article[] newArray(int size) {
+            return new Article[size];
+        }
+    };
+
+    private Article(Parcel in) {
+        id = in.readInt();
+        title = in.readString();
+        html = in.readString();
+        topicName = in.readString();
+        weight = in.readInt();
     }
 }

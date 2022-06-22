@@ -1,5 +1,7 @@
 package com.uservoice.uservoicesdk.model;
 
+import android.content.Context;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -11,8 +13,8 @@ public class RequestToken extends BaseModel {
     private String key;
     private String secret;
 
-    public static void getRequestToken(final Callback<RequestToken> callback) {
-        doGet(apiPath("/oauth/request_token.json"), new RestTaskCallback(callback) {
+    public static void getRequestToken(Context context, final Callback<RequestToken> callback) {
+        doGet(context, apiPath("/oauth/request_token.json"), new RestTaskCallback(callback) {
             @Override
             public void onComplete(JSONObject result) throws JSONException {
                 callback.onModel(deserializeObject(result, "token", RequestToken.class));
@@ -22,8 +24,8 @@ public class RequestToken extends BaseModel {
 
     @Override
     public void load(JSONObject object) throws JSONException {
-        key = object.getString("oauth_token");
-        secret = object.getString("oauth_token_secret");
+        key = getString(object, "oauth_token");
+        secret = getString(object, "oauth_token_secret");
     }
 
     public String getKey() {

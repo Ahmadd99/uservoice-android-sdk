@@ -44,6 +44,7 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
     private final FragmentActivity context;
     private boolean configLoaded = false;
     private List<Integer> staticRows;
+    private List<Article> articles;
 
     public PortalAdapter(FragmentActivity context) {
         this.context = context;
@@ -64,22 +65,21 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
         return Session.getInstance().getTopics();
     }
 
-    private List<Article> getArticles() {
-        return Session.getInstance().getArticles();
-    }
-
     private boolean shouldShowArticles() {
-        return Session.getInstance().getConfig().getTopicId() != -1 || (getTopics() != null && getTopics().isEmpty());
+        return Session.getInstance().getConfig(context).getTopicId() != -1 || (getTopics() != null && getTopics().isEmpty());
     }
 
     private void loadForum() {
-        Forum.loadForum(Session.getInstance().getConfig().getForumId(), new DefaultCallback<Forum>(context) {
-            @Override
-            public void onModel(Forum model) {
-                Session.getInstance().setForum(model);
-                notifyDataSetChanged();
-            }
-        });
+        Config config = Session.getInstance().getConfig(context);
+        if (config.shouldShowForum() || config.shouldShowPostIdea()) {
+            Forum.loadForum(context, Session.getInstance().getConfig(context).getForumId(), new DefaultCallback<Forum>(context) {
+                @Override
+                public void onModel(Forum model) {
+                    Session.getInstance().setForum(model);
+                    notifyDataSetChanged();
+                }
+            });
+        }
     }
 
     private void loadTopics() {
@@ -87,23 +87,23 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
             @Override
             public void onModel(List<Article> model) {
                 Session.getInstance().setTopics(new ArrayList<Topic>());
-                Session.getInstance().setArticles(model);
+                articles = model;
                 notifyDataSetChanged();
             }
         };
 
-        if (Session.getInstance().getConfig().getTopicId() != -1) {
-            Article.loadForTopic(Session.getInstance().getConfig().getTopicId(), articlesCallback);
+        if (Session.getInstance().getConfig(context).getTopicId() != -1) {
+            Article.loadPageForTopic(context, Session.getInstance().getConfig(context).getTopicId(), 1, articlesCallback);
         } else {
-            Topic.loadTopics(new DefaultCallback<List<Topic>>(context) {
+            Topic.loadTopics(context, new DefaultCallback<List<Topic>>(context) {
                 @Override
                 public void onModel(List<Topic> model) {
                     if (model.isEmpty()) {
                         Session.getInstance().setTopics(model);
-                        Article.loadAll(articlesCallback);
+                        Article.loadPage(context, 1, articlesCallback);
                     } else {
                         ArrayList<Topic> topics = new ArrayList<Topic>(model);
-                        topics.add(Topic.ALL_ARTICLES);
+                        topics.add(Topic.allArticlesTopic(context));
                         Session.getInstance().setTopics(topics);
                         notifyDataSetChanged();
                     }
@@ -115,7 +115,7 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
     private void computeStaticRows() {
         if (staticRows == null) {
             staticRows = new ArrayList<Integer>();
-            Config config = Session.getInstance().getConfig();
+            Config config = Session.getInstance().getConfig(context);
             if (config.shouldShowContactUs())
                 staticRows.add(CONTACT);
             if (config.shouldShowForum())
@@ -132,11 +132,11 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
         } else {
             computeStaticRows();
             int rows = staticRows.size();
-            if (Session.getInstance().getConfig().shouldShowKnowledgeBase()) {
-                if (getTopics() == null || (shouldShowArticles() && getArticles() == null)) {
+            if (Session.getInstance().getConfig(context).shouldShowKnowledgeBase()) {
+                if (getTopics() == null || (shouldShowArticles() && articles == null)) {
                     rows += 1;
                 } else {
-                    rows += shouldShowArticles() ? getArticles().size() : getTopics().size();
+                    rows += shouldShowArticles() ? articles.size() : getTopics().size();
                 }
             }
             if (!Session.getInstance().getClientConfig().isWhiteLabel()) {
@@ -174,8 +174,8 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
             return Session.getInstance().getForum();
         else if (getTopics() != null && !shouldShowArticles() && position >= staticRows.size() && position - staticRows.size() < getTopics().size())
             return getTopics().get(position - staticRows.size());
-        else if (getArticles() != null && shouldShowArticles() && position >= staticRows.size() && position - staticRows.size() < getArticles().size())
-            return getArticles().get(position - staticRows.size());
+        else if (articles != null && shouldShowArticles() && position >= staticRows.size() && position - staticRows.size() < articles.size())
+            return articles.get(position - staticRows.size());
         return null;
     }
 
@@ -244,7 +244,7 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
             TextView textView = (TextView) view.findViewById(R.id.uv_text);
             textView.setText(topic.getName());
             textView = (TextView) view.findViewById(R.id.uv_text2);
-            if (topic == Topic.ALL_ARTICLES) {
+            if (topic.getId() == -1) {
                 textView.setVisibility(View.GONE);
             } else {
                 textView.setVisibility(View.VISIBLE);
@@ -288,11 +288,11 @@ public class PortalAdapter extends SearchAdapter<BaseModel> implements AdapterVi
                 return LOADING;
             return type;
         }
-        if (Session.getInstance().getConfig().shouldShowKnowledgeBase()) {
-	        if (getTopics() == null || (shouldShowArticles() && getArticles() == null)) {
+        if (Session.getInstance().getConfig(context).shouldShowKnowledgeBase()) {
+	        if (getTopics() == null || (shouldShowArticles() && articles == null)) {
 	        	if (position - staticRows.size() == 0)
 	        		return LOADING;
-	        } else if (shouldShowArticles() && position - staticRows.size() < getArticles().size()) {
+	        } else if (shouldShowArticles() && position - staticRows.size() < articles.size()) {
 	        	return ARTICLE;
 	        } else if (!shouldShowArticles() && position - staticRows.size() < getTopics().size()) {
 	        	return TOPIC;

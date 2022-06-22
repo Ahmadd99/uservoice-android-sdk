@@ -34,25 +34,23 @@ public class UserVoice {
 
     public static void init(Config config, Context context) {
         Session.reset();
+        Session.getInstance().init(context, config);
         Babayaga.init(context);
-        Babayaga.setUserTraits(config.getUserTraits());
-        Session.getInstance().setContext(context);
-        Session.getInstance().setConfig(config);
     }
 
     public static void setExternalId(String scope, String id) {
         Session.getInstance().setExternalId(scope, id);
     }
 
-    public static void track(String event, Map<String, Object> properties) {
-        Babayaga.track(event, properties);
+    public static void track(Context context, String event, Map<String, Object> properties) {
+        Babayaga.track(context, event, properties);
     }
 
-    public static void track(String event) {
-        track(event, null);
+    public static void track(Context context, String event) {
+        track(context, event, null);
     }
 
     public static String getVersion() {
-        return "1.1.0";
+        return "1.2.7";
     }
 }

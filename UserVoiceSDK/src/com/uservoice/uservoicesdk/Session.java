@@ -5,28 +5,25 @@ import java.util.List;
 import java.util.Map;
 
 import oauth.signpost.OAuthConsumer;
-import oauth.signpost.commonshttp.CommonsHttpOAuthConsumer;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 
-import com.uservoice.uservoicesdk.babayaga.Babayaga;
+import com.uservoice.uservoicesdk.flow.SigninManager;
 import com.uservoice.uservoicesdk.model.AccessToken;
-import com.uservoice.uservoicesdk.model.Article;
 import com.uservoice.uservoicesdk.model.ClientConfig;
-import com.uservoice.uservoicesdk.model.Comment;
-import com.uservoice.uservoicesdk.model.CustomField;
 import com.uservoice.uservoicesdk.model.Forum;
 import com.uservoice.uservoicesdk.model.RequestToken;
-import com.uservoice.uservoicesdk.model.Suggestion;
 import com.uservoice.uservoicesdk.model.Topic;
 import com.uservoice.uservoicesdk.model.User;
+import com.uservoice.uservoicesdk.rest.OkOAuthConsumer;
 
 public class Session {
 
     private static Session instance;
 
-    public static Session getInstance() {
+    public static synchronized Session getInstance() {
         if (instance == null) {
             instance = new Session();
         }
@@ -40,7 +37,6 @@ public class Session {
     private Session() {
     }
 
-    private Context context;
     private Config config;
     private OAuthConsumer oauthConsumer;
     private RequestToken requestToken;
@@ -49,51 +45,42 @@ public class Session {
     private ClientConfig clientConfig;
     private Forum forum;
     private List<Topic> topics;
-    private List<Article> articles;
-    private Map<String, String> externalIds = new HashMap<String, String>();
-    private Suggestion suggestion;
-    private Article article;
-    private Topic topic;
-    private Comment comment;
-    private CustomField customField;
+    private Map<String, String> externalIds = new HashMap<>();
     private Runnable signinListener;
 
-    public Context getContext() {
-        return context;
-    }
-
-    public Config getConfig() {
+    public Config getConfig(Context context) {
+        if (config == null && context != null) {
+            config = Config.load(getSharedPreferences(context), "config", "config", Config.class);
+        }
         return config;
     }
 
-    public void setConfig(Config config) {
+    public void init(Context context, Config config) {
         this.config = config;
-        if (config.getEmail() != null) {
-            persistIdentity(config.getName(), config.getEmail());
-        }
+        persistIdentity(context, config.getName(), config.getEmail());
+        config.persist(getSharedPreferences(context), "config", "config");
+        persistSite(context);
     }
 
-    public void setContext(Context context) {
-        this.context = context;
-    }
-
-    public void persistIdentity(String name, String email) {
-        Editor edit = getSharedPreferences().edit();
+    public void persistIdentity(Context context, String name, String email) {
+        Editor edit = getSharedPreferences(context).edit();
         edit.putString("user_name", name);
-        edit.putString("user_email", email);
+        if (SigninManager.isValidEmail(email)) {
+            edit.putString("user_email", email);
+        }
         edit.commit();
     }
 
-    public String getName() {
+    public String getName(Context context) {
         if (user != null)
             return user.getName();
-        return getSharedPreferences().getString("user_name", null);
+        return getSharedPreferences(context).getString("user_name", null);
     }
 
-    public String getEmail() {
+    public String getEmail(Context context) {
         if (user != null)
             return user.getEmail();
-        return getSharedPreferences().getString("user_email", null);
+        return getSharedPreferences(context).getString("user_email", null);
     }
 
     public RequestToken getRequestToken() {
@@ -104,12 +91,12 @@ public class Session {
         this.requestToken = requestToken;
     }
 
-    public OAuthConsumer getOAuthConsumer() {
+    public OAuthConsumer getOAuthConsumer(Context context) {
         if (oauthConsumer == null) {
-            if (config.getKey() != null)
-                oauthConsumer = new CommonsHttpOAuthConsumer(config.getKey(), config.getSecret());
+            if (getConfig(context).getKey() != null)
+                oauthConsumer = new OkOAuthConsumer(getConfig(context).getKey(), getConfig(context).getSecret());
             else if (clientConfig != null)
-                oauthConsumer = new CommonsHttpOAuthConsumer(clientConfig.getKey(), clientConfig.getSecret());
+                oauthConsumer = new OkOAuthConsumer(clientConfig.getKey(), clientConfig.getSecret());
         }
         return oauthConsumer;
     }
@@ -120,13 +107,27 @@ public class Session {
 
     public void setAccessToken(Context context, AccessToken accessToken) {
         this.accessToken = accessToken;
-        accessToken.persist(getSharedPreferences(), "access_token", "access_token");
+        accessToken.persist(getSharedPreferences(context), "access_token", "access_token");
         if (signinListener != null)
             signinListener.run();
     }
 
-    public SharedPreferences getSharedPreferences() {
-        return context.getSharedPreferences("uv_" + config.getSite().replaceAll("\\W", "_"), 0);
+    protected void persistSite(Context context) {
+        Editor edit = context.getSharedPreferences("uv_site", 0).edit();
+        edit.putString("site", config.getSite());
+        edit.commit();
+    }
+
+    public SharedPreferences getSharedPreferences(Context context) {
+        String site;
+        if (config != null) {
+            site = config.getSite();
+        } else {
+            site = context.getSharedPreferences("uv_site", 0).getString("site", null);
+        }
+        // TODO It is possible the site could be null.
+        // We should have a checked UserVoiceCouldNotBeInitializedException that will inform the controller to dismiss itself
+        return context.getSharedPreferences("uv_" + site.replaceAll("\\W", "_"), 0);
     }
 
     public void setAccessToken(AccessToken accessToken) {
@@ -137,9 +138,9 @@ public class Session {
         return user;
     }
 
-    public void setUser(User user) {
+    public void setUser(Context context, User user) {
         this.user = user;
-        persistIdentity(user.getName(), user.getEmail());
+        persistIdentity(context, user.getName(), user.getEmail());
     }
 
     public ClientConfig getClientConfig() {
@@ -166,60 +167,12 @@ public class Session {
         this.forum = forum;
     }
 
-    public Suggestion getSuggestion() {
-        return suggestion;
-    }
-
-    public void setSuggestion(Suggestion suggestion) {
-        this.suggestion = suggestion;
-    }
-
-    public Article getArticle() {
-        return article;
-    }
-
-    public void setArticle(Article article) {
-        this.article = article;
-    }
-
-    public Topic getTopic() {
-        return topic;
-    }
-
-    public void setTopic(Topic topic) {
-        this.topic = topic;
-    }
-
-    public Comment getComment() {
-        return comment;
-    }
-
-    public void setComment(Comment comment) {
-        this.comment = comment;
-    }
-
     public void setTopics(List<Topic> topics) {
         this.topics = topics;
     }
 
     public List<Topic> getTopics() {
         return topics;
-    }
-
-    public List<Article> getArticles() {
-        return articles;
-    }
-
-    public void setArticles(List<Article> articles) {
-        this.articles = articles;
-    }
-
-    public void setCustomField(CustomField customField) {
-        this.customField = customField;
-    }
-
-    public CustomField getCustomField() {
-        return customField;
     }
 
     public void setSignInListener(Runnable runnable) {
